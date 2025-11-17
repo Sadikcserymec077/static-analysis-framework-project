@@ -1,186 +1,154 @@
-@echo off
-title Static Analysis Framework - Setup
-setlocal ENABLEDELAYEDEXPANSION
+📱 Static Analysis Framework UI
 
-echo ====================================================
-echo  Static Analysis Framework - First-time Setup
-echo ====================================================
-echo.
+A modern React + Node.js UI that securely interacts with Mobile Security Framework (MobSF) for Android app static analysis.
 
-REM ----------------------------------------------------
-REM 1. Check Node.js
-REM ----------------------------------------------------
-echo [STEP] Checking Node.js...
-node -v >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Node.js is not installed or not in PATH.
-    echo         Install Node.js from: https://nodejs.org/
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%v in ('node -v') do set NODE_VER=%%v
-echo [OK] Node.js version: !NODE_VER!
-echo.
+✔ Secure proxy — MobSF API key is stored only in backend
+✔ Automatically caches JSON/PDF results
+✔ One-click automation using batch scripts:
 
-REM ----------------------------------------------------
-REM 2. Check npm
-REM ----------------------------------------------------
-echo [STEP] Checking npm...
-npm -v >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] npm is not available.
-    echo         Reinstall Node.js (it should include npm) and try again.
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%v in ('npm -v') do set NPM_VER=%%v
-echo [OK] npm version: !NPM_VER!
-echo.
+→ First-time installation & MobSF setup guide run the below command
+command 1)
+        .\setup.bat 
+then run below command frontend + backend
+command 2)
+        .\start.bat 
 
-REM ----------------------------------------------------
-REM 3. Install backend dependencies
-REM ----------------------------------------------------
-if not exist "mobsf-ui-backend\package.json" (
-    echo [ERROR] mobsf-ui-backend\package.json not found.
-    echo         Make sure you cloned the repo correctly.
-    pause
-    exit /b 1
-)
+🚀 Features
+Feature	Status
+APK Upload & Static Scan	✔
+Live Scan Logs	✔
+Security Score & Summary	✔
+Detailed Findings	✔
+Dangerous Permissions View	✔
+Offline JSON/PDF Report Caching	✔
+View/Download PDF Reports	✔
+Recent Scans List	✔
+Single-page Report View	✔
+📦 Project Structure
+mobsf-project/
+├─ setup.bat                ← One-click installation
+├─ start.bat                ← Start backend + frontend automatically
+│
+├─ mobsf-ui-backend/        ← Secure MobSF API proxy + caching
+│  ├─ server.js
+│  ├─ .env  (created during setup)
+│  ├─ reports/
+│  │   ├─ json/
+│  │   └─ pdf/
+│  └─ package.json
+│
+├─ mobsf-frontend/          ← React UI
+│  ├─ src/
+│  │  ├─ api.js
+│  │  └─ components/
+│  └─ package.json
+│
+└─ README.md
 
-echo [STEP] Installing backend dependencies (mobsf-ui-backend) ...
-cd /d mobsf-ui-backend
-call npm install
-if errorlevel 1 (
-    echo [ERROR] npm install failed in mobsf-ui-backend.
-    cd /d ..
-    pause
-    exit /b 1
-)
-cd /d ..
-echo [OK] Backend dependencies installed.
-echo.
+🧩 Requirements
+Tool	Version
+Node.js	18+
+npm	Included with Node
+Docker Desktop for Windows	Latest
+MobSF Docker Image	Pulled via setup.bat
+🛠 Initial Setup (run once)
 
-REM ----------------------------------------------------
-REM 4. Install frontend dependencies
-REM ----------------------------------------------------
-if not exist "mobsf-frontend\package.json" (
-    echo [ERROR] mobsf-frontend\package.json not found.
-    echo         Make sure you cloned the repo correctly.
-    pause
-    exit /b 1
-)
+Simply execute:
 
-echo [STEP] Installing frontend dependencies (mobsf-frontend) ...
-cd /d mobsf-frontend
-call npm install
-if errorlevel 1 (
-    echo [ERROR] npm install failed in mobsf-frontend.
-    cd /d ..
-    pause
-    exit /b 1
-)
-cd /d ..
-echo [OK] Frontend dependencies installed.
-echo.
+setup.bat
 
-REM ----------------------------------------------------
-REM 5. Create reports/json and reports/pdf folders
-REM ----------------------------------------------------
-echo [STEP] Preparing reports folders...
-if not exist "mobsf-ui-backend\reports" mkdir "mobsf-ui-backend\reports"
-if not exist "mobsf-ui-backend\reports\json" mkdir "mobsf-ui-backend\reports\json"
-if not exist "mobsf-ui-backend\reports\pdf" mkdir "mobsf-ui-backend\reports\pdf"
-echo [OK] reports/json and reports/pdf are ready.
-echo.
 
-REM ----------------------------------------------------
-REM 6. Check Docker and guide user to run MobSF container
-REM ----------------------------------------------------
-echo [STEP] Checking Docker CLI...
-docker -v >nul 2>&1
-if errorlevel 1 (
-    echo [WARN] Docker is not installed or not in PATH.
-    echo        MobSF requires Docker. Install Docker Desktop later.
-    echo        You can still continue and set API key manually.
-    echo.
-) else (
-    for /f "tokens=1,2*" %%a in ('docker -v') do set DOCKER_VER=%%a %%b
-    echo [OK] Docker detected: !DOCKER_VER!
-    echo.
-    echo [STEP] Checking Docker daemon...
-    docker info >nul 2>&1
-    if errorlevel 1 (
-        echo [WARN] Docker daemon is not running.
-        echo        Start Docker Desktop before using MobSF.
-        echo        You can still continue and run these commands later:
-        echo          docker pull opensecurity/mobile-security-framework-mobsf:latest
-        echo          docker run -it --rm -p 8000:8000 opensecurity/mobile-security-framework-mobsf:latest
-        echo.
-    ) else (
-        echo [OK] Docker daemon is running.
-        echo.
-        echo ====================================================
-        echo  IMPORTANT: Setup MobSF Docker (run these ONCE)
-        echo ====================================================
-        echo Open a NEW terminal window and execute:
-        echo.
-        echo   docker pull opensecurity/mobile-security-framework-mobsf:latest
-        echo   docker run -it --rm -p 8000:8000 opensecurity/mobile-security-framework-mobsf:latest
-        echo.
-        echo Then:
-        echo   1) Wait for MobSF to start
-        echo   2) Open http://localhost:8000 in your browser
-        echo   3) Login ^(default credentials if new install^)
-        echo   4) Go to: Settings -^> Security
-        echo   5) COPY the "MobSF REST API Key"
-        echo.
-        echo After you have copied the API key, return to THIS window.
-        pause
-    )
-)
+It will:
 
-REM ----------------------------------------------------
-REM 7. Ask for MobSF API key and create .env
-REM ----------------------------------------------------
-echo.
-echo [STEP] Configure MobSF API key
-echo Paste the MobSF REST API key you copied from:
-echo   http://localhost:8000  -> Settings -> Security
-echo.
+Check Node.js and npm
 
-set "MOBSF_API_KEY="
-set /p MOBSF_API_KEY=Enter MobSF REST API key and press ENTER: 
+Install frontend + backend dependencies
 
-if "%MOBSF_API_KEY%"=="" (
-    echo [ERROR] API key cannot be empty.
-    pause
-    exit /b 1
-)
+Create reports folders automatically
 
-echo [STEP] Writing mobsf-ui-backend\.env ...
-(
-    echo MOBSF_URL=http://localhost:8000
-    echo MOBSF_API_KEY=%MOBSF_API_KEY%
-    echo PORT=4000
-) > "mobsf-ui-backend\.env"
-echo [OK] .env file created/updated.
-echo.
+Check Docker
 
-REM ----------------------------------------------------
-REM 8. Final instructions
-REM ----------------------------------------------------
-echo ====================================================
-echo  Setup completed successfully.
-echo ====================================================
-echo.
-echo Next steps:
-echo   1) Make sure MobSF container is running 
-echo      (docker run -it --rm -p 8000:8000 opensecurity/mobile-security-framework-mobsf:latest)
-echo   2) Then run:  start.bat
-echo      This will start:
-echo        - Backend on http://localhost:4000
-echo        - Frontend on http://localhost:3000
-echo.
-pause
-endlocal
-exit /b 0
+Guide you to pull and run MobSF:
+
+docker pull opensecurity/mobile-security-framework-mobsf:latest
+docker run -it --rm -p 8000:8000 opensecurity/mobile-security-framework-mobsf:latest
+
+
+Open MobSF → Settings → Security → Copy REST API key
+
+Ask you to paste API key → auto-writes .env
+
+No manual file editing needed.
+
+▶ Run the Application
+
+Whenever you want to use the tool:
+
+start.bat
+
+
+This automatically opens 2 terminals:
+
+Service	URL
+Backend	http://localhost:4000
+
+Frontend	http://localhost:3000
+
+Frontend will auto-open in browser.
+
+🔄 How It Works
+Step	Action
+1️⃣	User uploads APK
+2️⃣	Backend proxies upload to MobSF (secure, hidden API key)
+3️⃣	Backend triggers scan
+4️⃣	Frontend polls scan logs → live updates
+5️⃣	Backend fetches & saves JSON/PDF to /reports
+6️⃣	User views/downloads results offline
+
+Reports stored at:
+
+mobsf-ui-backend/reports/
+├─ json/<hash>.json
+└─ pdf/<hash>.pdf
+
+🧰 API Endpoints (Proxy)
+Method	Path	Description
+POST	/api/upload	Upload APK/IPA
+POST	/api/scan	Trigger scan
+POST	/api/scan_logs	Poll scan status
+GET	/api/report_json/save?hash=	Cache JSON
+GET	/api/download_pdf/save?hash=	Cache PDF
+GET	/api/reports	List cached scans
+GET	/reports/json/<hash>	Open cached JSON
+GET	/reports/pdf/<hash>	Open cached PDF
+🧠 Troubleshooting
+Issue	Fix
+API key errors	Re-run setup.bat and update .env
+Docker not running	Start Docker Desktop
+Reports not showing	Ensure scan is fully completed
+Port conflicts	Stop other apps using 3000 / 4000
+🛡 Legal & Security Notice
+
+Do not analyze apps without permission
+
+Follow MobSF licensing and your organization’s security policy
+
+This tool is for learning, internal testing, research only
+
+🏁 Roadmap
+
+JWT Authentication support
+
+Theme (Light/Dark)
+
+Multiple MobSF server connections
+
+Better error visibility in UI
+
+Upload file history export
+
+🏷 License
+
+This project is for educational & research use only.
+MobSF copyright belongs to Mobile Security Framework.
+
