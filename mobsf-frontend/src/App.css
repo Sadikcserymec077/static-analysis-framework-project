@@ -1,0 +1,195 @@
+/* src/App.css */
+
+.saf-app {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #f0f2ff 0, #f5f7fb 40%, #eef2ff 100%);
+}
+
+/* Top navbar */
+.saf-navbar {
+  background: linear-gradient(90deg, #6f4ff5, #8a4fff);
+  color: #fff;
+  padding: 10px 0;
+}
+
+.saf-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.saf-logo {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-size: 20px;
+  color: #fff;
+}
+
+.saf-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.saf-subtitle {
+  font-size: 0.75rem;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+.saf-nav-links .saf-nav-link {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.saf-nav-links .saf-nav-link:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.saf-nav-link-active {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.saf-pill {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  text-decoration: none;
+}
+
+.saf-pill-success {
+  background: rgba(39, 174, 96, 0.9);
+}
+
+/* Main layout */
+.saf-main {
+  padding: 24px 0 40px;
+}
+
+.saf-main-container {
+  max-width: 1140px;
+}
+
+/* Upload card styling */
+.saf-upload-card {
+  border-radius: 16px;
+  border: none;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(80, 60, 180, 0.12);
+}
+
+.saf-upload-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.saf-upload-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97373, #fbbf77);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.saf-status-pill {
+  font-size: 0.85rem;
+}
+
+/* Dropzone */
+.saf-dropzone {
+  border-radius: 18px;
+  border: 2px dashed #d0d5ff;
+  background: linear-gradient(145deg, #f7f5ff, #ffffff);
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+
+.saf-dropzone:hover {
+  border-color: #b8c0ff;
+  box-shadow: 0 0 0 3px rgba(111, 79, 245, 0.08);
+}
+
+.saf-dropzone-folder {
+  font-size: 40px;
+  color: #f1b34c;
+  margin-bottom: 8px;
+}
+
+.saf-dropzone-text-main {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.saf-dropzone-text-sub {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.saf-dropzone-tip {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Primary button style to look like screenshot */
+.saf-primary-btn {
+  padding-inline: 22px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #7c5cff, #9a64ff);
+  box-shadow: 0 14px 30px rgba(96, 76, 255, 0.35);
+}
+
+.saf-primary-btn:hover {
+  background: linear-gradient(135deg, #6a4ae6, #8a54f0);
+}
+
+/* Secondary cards (Recent scans, etc) */
+.saf-secondary-card {
+  border-radius: 14px;
+  border: none;
+  background: #ffffff;
+}
+
+/* HumanReport small tweaks (keep from your previous CSS) */
+.humanreport-chart {
+  width: 160px;
+  height: 110px;
+  margin: 0 auto;
+}
+
+.humanreport-legend {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.humanreport-legend span {
+  margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-compact td,
+.table-compact th {
+  padding: 2px 6px !important;
+  font-size: 0.85rem !important;
+}

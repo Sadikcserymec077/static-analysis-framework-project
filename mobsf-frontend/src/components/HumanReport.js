@@ -1,0 +1,1068 @@
+// src/components/HumanReport.js
+import React, { useState } from "react";
+import {
+  Card,
+  Badge,
+  Table,
+  Row,
+  Col,
+  ListGroup,
+  Container,
+  Button,
+  Collapse,
+  OverlayTrigger,
+  Tooltip as BSTooltip,
+  Accordion,
+  Alert,
+} from "react-bootstrap";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+
+const SEVERITY_COLORS = {
+  high: "#e63946", // red
+  medium: "#f4c542", // yellow
+  warning: "#f4c542", // yellow (same as medium)
+  info: "#59b5ff", // sky blue
+  secure: "#90ee90", // green
+};
+
+function SeverityBadge({ sev }) {
+  if (!sev) return null;
+  const s = (sev || "").toLowerCase();
+  if (s.includes("high") || s.includes("critical"))
+    return (
+      <Badge bg="danger" className="ms-1">
+        High
+      </Badge>
+    );
+  if (s.includes("warn") || s.includes("medium") || s === "warning")
+    return (
+      <Badge bg="warning" text="dark" className="ms-1">
+        Medium
+      </Badge>
+    );
+  if (s === "secure" || s === "good")
+    return (
+      <Badge bg="success" className="ms-1">
+        Secure
+      </Badge>
+    );
+  return (
+    <Badge bg="info" className="ms-1">
+      Info
+    </Badge>
+  );
+}
+
+const short = (t, n = 160) =>
+  typeof t === "string"
+    ? t.length > n
+      ? t.slice(0, n) + "…"
+      : t
+    : t
+    ? String(t).slice(0, n)
+    : "";
+
+export default function HumanReport({ data }) {
+  const [expandedSections, setExpandedSections] = useState({
+    high: true,
+    medium: false,
+    info: false,
+    perms: false,
+  });
+
+  if (!data) return <div className="text-muted">No report loaded.</div>;
+
+  // -------------------------
+  // Basic metadata
+  // -------------------------
+  const appName =
+    data.app_name || data.APP_NAME || data.file_name || data.file || "(unknown)";
+  const fileName = data.file_name || data.FILE_NAME || "(unknown)";
+  const size = data.size || data.file_size || data.apk_size || "unknown";
+  const packageName = data.package_name || data.PACKAGE_NAME || "(unknown)";
+  const versionName = data.version_name || data.VERSION_NAME || "-";
+  const targetSdk = data.target_sdk || data.TargetSdkVersion || "-";
+  const minSdk = data.min_sdk || data.MinSdkVersion || "-";
+
+  // -------------------------
+  // Collect findings from sections
+  // -------------------------
+  const allFindings = [];
+
+  // 1. Certificate Analysis
+  const certAnalysis = data.certificate_analysis || {};
+  const certFindings = certAnalysis.certificate_findings || [];
+  certFindings.forEach((f) => {
+    if (Array.isArray(f) && f.length >= 3) {
+      const [severity, description, title] = f;
+      allFindings.push({
+        category: "Certificate Analysis",
+        title: title || "Certificate Issue",
+        severity: (severity || "info").toLowerCase(),
+        description: description || "",
+        path: "",
+        remediation: null,
+      });
+    }
+  });
+
+  // 2. Manifest Analysis
+  const manifestAnalysis =
+    data.manifest_analysis || data.Manifest || data.manifest || {};
+  const manifestFindingsRaw = Array.isArray(manifestAnalysis.manifest_findings)
+    ? manifestAnalysis.manifest_findings
+    : Array.isArray(manifestAnalysis.findings)
+    ? manifestAnalysis.findings
+    : [];
+  manifestFindingsRaw.forEach((f) => {
+    if (f && typeof f === "object") {
+      allFindings.push({
+        category: "Manifest Analysis",
+        title: f.title || f.name || "Manifest Issue",
+        severity: (f.severity || "info").toLowerCase(),
+        description: f.description || "",
+        path: f.path || f.file || "",
+        remediation: f.remediation || null,
+      });
+    }
+  });
+
+  // 3. Code Analysis
+  const codeAnalysis = data.code_analysis || {};
+  const codeFindings = codeAnalysis.findings || {};
+  Object.entries(codeFindings).forEach(([key, finding]) => {
+    if (finding && finding.metadata) {
+      const meta = finding.metadata;
+      const files = finding.files || {};
+      const fileList = Object.keys(files).join(", ");
+      allFindings.push({
+        category: "Code Analysis",
+        title: meta.description || key,
+        severity: (meta.severity || "info").toLowerCase(),
+        description: meta.description || "",
+        path: fileList,
+        remediation: null,
+        cwe: meta.cwe,
+        owasp: meta["owasp-mobile"],
+        masvs: meta.masvs,
+      });
+    }
+  });
+
+  // 4. Network Security
+  const networkSecurity = data.network_security || {};
+  const networkFindings = networkSecurity.network_findings || [];
+  networkFindings.forEach((f) => {
+    if (f && typeof f === "object") {
+      allFindings.push({
+        category: "Network Security",
+        title: f.title || f.name || "Network Issue",
+        severity: (f.severity || "info").toLowerCase(),
+        description: f.description || "",
+        path: f.path || "",
+        remediation: f.remediation || null,
+      });
+    }
+  });
+
+  // 5. API Findings
+  const apiFindings = Array.isArray(data.api)
+    ? data.api
+    : Array.isArray(data.api_findings)
+    ? data.api_findings
+    : [];
+  apiFindings.forEach((f) => {
+    if (f && typeof f === "object") {
+      allFindings.push({
+        category: "API Analysis",
+        title: f.title || f.name || "API Issue",
+        severity: (f.severity || f.level || "info").toLowerCase(),
+        description: f.description || "",
+        path: f.path || "",
+        remediation: f.remediation || null,
+      });
+    }
+  });
+
+  // -------------------------
+  // Summary counts from each section (matches MobSF PDF)
+  // -------------------------
+  const certSummary = certAnalysis.certificate_summary || {};
+  const manifestSummary = manifestAnalysis.manifest_summary || {};
+  const codeSummary = codeAnalysis.summary || {};
+  const networkSummary = networkSecurity.network_summary || {};
+
+  const totalHigh =
+    (certSummary.high || 0) +
+    (manifestSummary.high || 0) +
+    (codeSummary.high || 0) +
+    (networkSummary.high || 0);
+
+  const totalWarning =
+    (certSummary.warning || 0) +
+    (manifestSummary.warning || 0) +
+    (codeSummary.warning || 0) +
+    (networkSummary.warning || 0);
+
+  const totalGood =
+    (certSummary.secure || 0) +
+    (manifestSummary.secure || 0) +
+    (codeSummary.secure || 0) +
+    (networkSummary.secure || 0) +
+    (certSummary.good || 0) +
+    (manifestSummary.good || 0) +
+    (codeSummary.good || 0) +
+    (networkSummary.good || 0);
+
+  const totalInfo =
+    (certSummary.info || 0) +
+    (manifestSummary.info || 0) +
+    (codeSummary.info || 0) +
+    (networkSummary.info || 0);
+
+  const finalCounts = {
+    high: totalHigh,
+    medium: totalWarning,
+    info: totalInfo,
+    secure: totalGood,
+  };
+
+  // -------------------------
+  // Dangerous permissions
+  // -------------------------
+  const permsObj =
+    data.permissions || data.Permission || data.manifest_permissions || {};
+  const dangerousPerms = Object.entries(permsObj)
+    .filter(([k, v]) => {
+      if (!v) return false;
+      const vv =
+        typeof v === "string"
+          ? v
+          : v.status || v.level || v.risk || v.description || "";
+      return (
+        /(dangerous|danger|privileged)/i.test(vv) ||
+        /(WRITE|RECORD|CALL|SMS|LOCATION|CAMERA|STORAGE|CONTACTS|RECORD_AUDIO|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|GET_ACCOUNTS|AUTHENTICATE_ACCOUNTS|REQUEST_INSTALL_PACKAGES)/i.test(
+          k
+        )
+      );
+    })
+    .map(([k, v]) => ({
+      name: k,
+      info: typeof v === "string" ? v : v.description || JSON.stringify(v),
+    }));
+  const dangerousPermsCount = dangerousPerms.length;
+
+  // -------------------------
+  // Security score calculation (same algorithm as your sample)
+  // -------------------------
+  let score;
+  if (data.security_score !== undefined && data.security_score !== null) {
+    score = data.security_score;
+  } else if (data.securityScore !== undefined && data.securityScore !== null) {
+    score = data.securityScore;
+  } else {
+    const effectiveHigh = totalHigh + dangerousPermsCount;
+    const totalItems = effectiveHigh + totalWarning + totalInfo;
+    const weightedPenalty =
+      effectiveHigh * 10 + totalWarning * 5 + totalInfo * 1 - totalGood * 3;
+
+    if (totalItems === 0 && totalGood > 0) {
+      score = 100;
+    } else if (totalItems === 0) {
+      score = 100;
+    } else {
+      score = 100 - weightedPenalty;
+
+      // scale very low scores
+      if (score < 20) {
+        const issueRatio = totalItems / Math.max(totalItems + 10, 1);
+        score = Math.max(20, 100 - issueRatio * 80);
+      }
+
+      // caps based on dangerous permissions
+      if (dangerousPermsCount >= 10) score = Math.min(score, 35);
+      else if (dangerousPermsCount >= 5) score = Math.min(score, 55);
+      else if (dangerousPermsCount >= 3) score = Math.min(score, 70);
+
+      // extra penalty for many high issues
+      if (effectiveHigh >= 15) score = Math.max(0, score - 25);
+      else if (effectiveHigh >= 10) score = Math.max(0, score - 15);
+      else if (effectiveHigh >= 5) score = Math.max(0, score - 5);
+
+      // minimums based on total issues
+      if (totalItems <= 2) score = Math.max(score, 70);
+      else if (totalItems <= 5) score = Math.max(score, 50);
+      else if (totalItems <= 10) score = Math.max(score, 30);
+    }
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  // -------------------------
+  // Pie chart data
+  // -------------------------
+  const pieData = [
+    {
+      name: "High",
+      key: "high",
+      value: finalCounts.high,
+      color: SEVERITY_COLORS.high,
+    },
+    {
+      name: "Medium",
+      key: "medium",
+      value: finalCounts.medium,
+      color: SEVERITY_COLORS.medium,
+    },
+    {
+      name: "Info",
+      key: "info",
+      value: finalCounts.info,
+      color: SEVERITY_COLORS.info,
+    },
+  ].filter((d) => d.value > 0);
+
+  // severity lists
+  const highFindings = allFindings.filter((f) => {
+    const s = (f.severity || "").toLowerCase();
+    return s.includes("high") || s.includes("critical");
+  });
+  const medFindings = allFindings.filter((f) => {
+    const s = (f.severity || "").toLowerCase();
+    return s.includes("warn") || s.includes("medium") || s === "warning";
+  });
+  const infoFindings = allFindings.filter((f) => {
+    const s = (f.severity || "").toLowerCase();
+    return !(
+      s.includes("high") ||
+      s.includes("warn") ||
+      s.includes("medium") ||
+      s.includes("critical") ||
+      s === "secure" ||
+      s === "good"
+    );
+  });
+
+  // by category
+  const findingsByCategory = allFindings.reduce((acc, f) => {
+    const cat = f.category || "Other";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(f);
+    return acc;
+  }, {});
+
+  const scoreColor =
+    score > 80
+      ? "#90ee90"
+      : score > 50
+      ? SEVERITY_COLORS.medium
+      : SEVERITY_COLORS.high;
+
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // -------------------------
+  // Render
+  // -------------------------
+  return (
+    <div>
+      {/* TOP: Score + chart + app info */}
+      <Card
+        className="mb-3 shadow-lg"
+        style={{
+          background:
+            "linear-gradient(135deg, #4a90e2 0%, #357abd 50%, #264475 100%)",
+          color: "white",
+        }}
+      >
+        <Card.Body>
+          <Container>
+            <Row className="align-items-center">
+              {/* Chart */}
+              <Col md={4} className="text-center mb-3 mb-md-0">
+                <div style={{ width: 200, height: 160, margin: "0 auto" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        innerRadius={30}
+                        labelLine={false}
+                        label={false}
+                      >
+                        {pieData.map((entry, idx) => (
+                          <Cell key={`cell-${idx}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {pieData.map((d) => (
+                    <div
+                      key={d.key}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 12,
+                          height: 12,
+                          background: d.color,
+                          display: "inline-block",
+                          borderRadius: 3,
+                        }}
+                      />
+                      <small style={{ color: "white", fontWeight: 600 }}>
+                        {d.name}: <strong>{d.value}</strong>
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </Col>
+
+              {/* Score + recommendation */}
+              <Col md={4} className="text-center mb-3 mb-md-0">
+                <OverlayTrigger
+                  placement="top"
+                  overlay={
+                    <BSTooltip>
+                      <strong>How is the score calculated?</strong>
+                      <br />
+                      High: 10 pts, Warning: 5 pts, Info: 1 pt, Dangerous
+                      permissions counted as High. Secure/Good findings give
+                      bonus. Score normalized so 100 = no issues.
+                    </BSTooltip>
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      marginBottom: 8,
+                      textShadow: "1px 1px 2px rgba(0,0,0,0.2)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Security Score ℹ️
+                  </div>
+                </OverlayTrigger>
+
+                <div
+                  style={{
+                    fontSize: 48,
+                    fontWeight: 900,
+                    textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+                    color: scoreColor,
+                  }}
+                >
+                  {score}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>out of 100</div>
+
+                <div
+                  style={{ marginTop: 12, width: 180, margin: "12px auto 0" }}
+                >
+                  <div
+                    style={{
+                      height: 12,
+                      background: "rgba(255,255,255,0.3)",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${score}%`,
+                        height: "100%",
+                        background: scoreColor,
+                        transition: "width 0.5s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className="mt-3"
+                  style={{
+                    fontSize: 13,
+                    color: "white",
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <div>
+                    High: <strong>{finalCounts.high}</strong> &nbsp; Warning:{" "}
+                    <strong>{finalCounts.medium}</strong> &nbsp; Info:{" "}
+                    <strong>{finalCounts.info}</strong>
+                  </div>
+                  {totalGood > 0 && (
+                    <div className="mt-1">
+                      Good/Secure: <strong>{totalGood}</strong>
+                    </div>
+                  )}
+                  {dangerousPermsCount > 0 && (
+                    <div className="mt-1">
+                      Dangerous perms: <strong>{dangerousPermsCount}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recommendation */}
+                <div className="mt-4">
+                  {score >= 70 && dangerousPermsCount < 3 && totalHigh < 5 ? (
+                    <Alert
+                      variant="success"
+                      style={{
+                        background: "rgba(40, 167, 69, 0.2)",
+                        border: "2px solid rgba(40, 167, 69, 0.5)",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        margin: 0,
+                      }}
+                    >
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ fontSize: "1.5rem", marginRight: "10px" }}
+                        >
+                          ✅
+                        </span>
+                        <div>
+                          <strong>Safe to Install</strong>
+                          <div className="small mt-1">
+                            Good security posture. Only minor issues detected.
+                          </div>
+                        </div>
+                      </div>
+                    </Alert>
+                  ) : score >= 40 &&
+                    dangerousPermsCount < 5 &&
+                    totalHigh < 8 ? (
+                    <Alert
+                      variant="warning"
+                      style={{
+                        background: "rgba(255, 193, 7, 0.2)",
+                        border: "2px solid rgba(255, 193, 7, 0.5)",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        margin: 0,
+                      }}
+                    >
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ fontSize: "1.5rem", marginRight: "10px" }}
+                        >
+                          ⚠️
+                        </span>
+                        <div>
+                          <strong>Install with Caution</strong>
+                          <div className="small mt-1">
+                            Review important issues before installing.
+                          </div>
+                        </div>
+                      </div>
+                    </Alert>
+                  ) : (
+                    <Alert
+                      variant="danger"
+                      style={{
+                        background: "rgba(220, 53, 69, 0.2)",
+                        border: "2px solid rgba(220, 53, 69, 0.5)",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        margin: 0,
+                      }}
+                    >
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ fontSize: "1.5rem", marginRight: "10px" }}
+                        >
+                          🚫
+                        </span>
+                        <div>
+                          <strong>Not Recommended to Install</strong>
+                          <div className="small mt-1">
+                            Many high-severity issues and/or dangerous
+                            permissions. Avoid installing.
+                          </div>
+                        </div>
+                      </div>
+                    </Alert>
+                  )}
+                </div>
+              </Col>
+
+              {/* App info */}
+              <Col md={4}>
+                <h6
+                  style={{
+                    marginBottom: 12,
+                    fontWeight: 700,
+                    textShadow: "1px 1px 2px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  App Information
+                </h6>
+                <Table
+                  size="sm"
+                  className="text-white"
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  <tbody>
+                    <tr>
+                      <th style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        Name
+                      </th>
+                      <td style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        {appName}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        File
+                      </th>
+                      <td style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        {fileName}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        Pkg
+                      </th>
+                      <td style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        {packageName}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        Ver
+                      </th>
+                      <td style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        {versionName}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        Size
+                      </th>
+                      <td style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+                        {size}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th style={{ border: "none" }}>
+                        <OverlayTrigger
+                          placement="left"
+                          overlay={
+                            <BSTooltip>
+                              SDK = Target / Min Android API levels
+                            </BSTooltip>
+                          }
+                        >
+                          <span style={{ cursor: "pointer" }}>SDK ℹ️</span>
+                        </OverlayTrigger>
+                      </th>
+                      <td style={{ border: "none" }}>
+                        {targetSdk}/{minSdk}
+                      </td>
+                    </tr>
+                  </tbody>
+                </Table>
+              </Col>
+            </Row>
+          </Container>
+        </Card.Body>
+      </Card>
+
+      {/* Security findings by severity */}
+      <Card className="mb-3 shadow-sm">
+        <Card.Body>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <Card.Title className="mb-0">
+                ⚠️ Security Findings by Severity
+              </Card.Title>
+              <small className="text-muted">
+                All security issues found across all analysis sections
+              </small>
+            </div>
+            <div>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => toggleSection("high")}
+              >
+                {expandedSections.high ? "▼" : "▶"} High (
+                {highFindings.length})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                className="ms-2"
+                onClick={() => toggleSection("medium")}
+              >
+                {expandedSections.medium ? "▼" : "▶"} Medium (
+                {medFindings.length})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                className="ms-2"
+                onClick={() => toggleSection("info")}
+              >
+                {expandedSections.info ? "▼" : "▶"} Other (
+                {infoFindings.length})
+              </Button>
+            </div>
+          </div>
+
+          <Collapse in={expandedSections.high}>
+            <div>
+              <h6 className="text-danger">
+                🔥 High Severity ({highFindings.length})
+              </h6>
+              <p className="small text-muted mb-3">
+                Critical security risks that should be fixed immediately.
+              </p>
+              {highFindings.length === 0 ? (
+                <div className="text-muted small mb-3">
+                  No high severity issues.
+                </div>
+              ) : (
+                <ListGroup className="mb-3">
+                  {highFindings.map((f, i) => (
+                    <ListGroup.Item key={i}>
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div style={{ flex: 1 }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <Badge
+                              bg="secondary"
+                              style={{ fontSize: "0.7rem" }}
+                            >
+                              {f.category}
+                            </Badge>
+                            <strong
+                              dangerouslySetInnerHTML={{ __html: f.title }}
+                            />
+                            <SeverityBadge sev={f.severity} />
+                          </div>
+                          <div className="small text-muted mt-1">
+                            {short(f.description)}
+                          </div>
+                          {f.path && (
+                            <div className="small text-muted mt-1">
+                              📁 Location: {f.path}
+                            </div>
+                          )}
+                          {f.cwe && (
+                            <div className="small text-muted mt-1">
+                              🔗 CWE: {f.cwe}
+                            </div>
+                          )}
+                          {f.owasp && (
+                            <div className="small text-muted">
+                              🛡️ OWASP: {f.owasp}
+                            </div>
+                          )}
+                        </div>
+                        {f.remediation && (
+                          <div style={{ minWidth: 240 }}>
+                            <div className="small text-muted">💡 How to fix:</div>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                background: "var(--bg-secondary, #f8f9fa)",
+                                padding: 8,
+                                borderRadius: 6,
+                                border:
+                                  "1px solid var(--border-color, #e5e5e5)",
+                              }}
+                            >
+                              <em className="small">
+                                {short(f.remediation, 400)}
+                              </em>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              )}
+            </div>
+          </Collapse>
+
+          <Collapse in={expandedSections.medium}>
+            <div>
+              <h6 className="text-warning">
+                ⚡ Medium Severity ({medFindings.length})
+              </h6>
+              <p className="small text-muted mb-3">
+                Moderate security concerns that should be reviewed and fixed.
+              </p>
+              {medFindings.length === 0 ? (
+                <div className="text-muted small mb-3">
+                  No medium severity issues.
+                </div>
+              ) : (
+                <ListGroup className="mb-3">
+                  {medFindings.map((f, i) => (
+                    <ListGroup.Item key={i}>
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <Badge
+                          bg="secondary"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {f.category}
+                        </Badge>
+                        <strong
+                          dangerouslySetInnerHTML={{ __html: f.title }}
+                        />
+                        <SeverityBadge sev={f.severity} />
+                      </div>
+                      <div className="small text-muted mt-1">
+                        {short(f.description)}
+                      </div>
+                      {f.path && (
+                        <div className="small text-muted mt-1">
+                          📁 Location: {f.path}
+                        </div>
+                      )}
+                      {f.cwe && (
+                        <div className="small text-muted mt-1">
+                          🔗 CWE: {f.cwe}
+                        </div>
+                      )}
+                      {f.remediation && (
+                        <div
+                          className="small mt-1"
+                          style={{
+                            background: "var(--bg-secondary, #f8f9fa)",
+                            padding: 6,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <strong>💡 How to fix:</strong>{" "}
+                          <em>{short(f.remediation, 400)}</em>
+                        </div>
+                      )}
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              )}
+            </div>
+          </Collapse>
+
+          <Collapse in={expandedSections.info}>
+            <div>
+              <h6 className="text-info">
+                ℹ️ Other findings ({infoFindings.length})
+              </h6>
+              <p className="small text-muted mb-3">
+                Informational notes and minor observations.
+              </p>
+              {infoFindings.length === 0 ? (
+                <div className="text-muted small mb-3">No other issues.</div>
+              ) : (
+                <ListGroup className="mb-3">
+                  {infoFindings.slice(0, 10).map((f, i) => (
+                    <ListGroup.Item key={i}>
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <Badge
+                          bg="secondary"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {f.category}
+                        </Badge>
+                        <strong
+                          dangerouslySetInnerHTML={{ __html: f.title }}
+                        />
+                        <SeverityBadge sev={f.severity} />
+                      </div>
+                      <div className="small text-muted mt-1">
+                        {short(f.description)}
+                      </div>
+                      {f.path && (
+                        <div className="small text-muted mt-1">
+                          📁 Location: {f.path}
+                        </div>
+                      )}
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              )}
+              {infoFindings.length > 10 && (
+                <div className="text-muted text-center">
+                  ... and {infoFindings.length - 10} more
+                </div>
+              )}
+            </div>
+          </Collapse>
+        </Card.Body>
+      </Card>
+
+      {/* Findings by analysis category */}
+      <Card className="mb-3 shadow-sm">
+        <Card.Body>
+          <Card.Title className="mb-3">
+            📋 Findings by Analysis Category
+          </Card.Title>
+          <Accordion>
+            {Object.entries(findingsByCategory).map(([category, findings]) => {
+              const highCount = findings.filter((f) =>
+                (f.severity || "").toLowerCase().includes("high")
+              ).length;
+              const medCount = findings.filter((f) => {
+                const s = (f.severity || "").toLowerCase();
+                return s.includes("warn") || s.includes("medium");
+              }).length;
+              const infoCount = findings.length - highCount - medCount;
+              return (
+                <Accordion.Item eventKey={category} key={category}>
+                  <Accordion.Header>
+                    <div className="d-flex justify-content-between align-items-center w-100 pe-3">
+                      <div>
+                        <strong>{category}</strong>
+                        <Badge bg="secondary" className="ms-2">
+                          {findings.length} findings
+                        </Badge>
+                      </div>
+                      <div>
+                        <Badge bg="danger" className="me-1">
+                          High: {highCount}
+                        </Badge>
+                        <Badge bg="warning" text="dark" className="me-1">
+                          Med: {medCount}
+                        </Badge>
+                        <Badge bg="info">Info: {infoCount}</Badge>
+                      </div>
+                    </div>
+                  </Accordion.Header>
+                  <Accordion.Body>
+                    <ListGroup variant="flush">
+                      {findings.slice(0, 20).map((f, idx) => (
+                        <ListGroup.Item key={idx}>
+                          <div className="d-flex align-items-start gap-2">
+                            <SeverityBadge sev={f.severity} />
+                            <div style={{ flex: 1 }}>
+                              <strong
+                                dangerouslySetInnerHTML={{ __html: f.title }}
+                              />
+                              <div className="small text-muted mt-1">
+                                {short(f.description)}
+                              </div>
+                              {f.path && (
+                                <div className="small text-muted mt-1">
+                                  📁 {f.path}
+                                </div>
+                              )}
+                              {f.cwe && (
+                                <div className="small text-muted mt-1">
+                                  🔗 {f.cwe}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </ListGroup.Item>
+                      ))}
+                    </ListGroup>
+                    {findings.length > 20 && (
+                      <div className="text-muted text-center mt-2">
+                        ... and {findings.length - 20} more findings
+                      </div>
+                    )}
+                  </Accordion.Body>
+                </Accordion.Item>
+              );
+            })}
+          </Accordion>
+        </Card.Body>
+      </Card>
+
+      {/* Dangerous permissions */}
+      <Card className="mb-3 shadow-sm">
+        <Card.Body>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <Card.Title className="mb-0">
+                📝 Dangerous Permissions ({dangerousPermsCount})
+              </Card.Title>
+              <small className="text-muted">
+                App permissions that can access sensitive user data or system
+                features
+              </small>
+            </div>
+            <Button
+              size="sm"
+              variant="outline-secondary"
+              onClick={() => toggleSection("perms")}
+            >
+              {expandedSections.perms ? "▼ Collapse" : "▶ Expand"}
+            </Button>
+          </div>
+          <Collapse in={expandedSections.perms}>
+            <div>
+              {dangerousPermsCount === 0 ? (
+                <div className="text-muted small">
+                  No dangerous permissions detected.
+                </div>
+              ) : (
+                <>
+                  <p className="small text-muted mb-3">
+                    These permissions allow the app to access sensitive
+                    features. Ensure they are really required.
+                  </p>
+                  <ListGroup>
+                    {dangerousPerms.map((p, i) => (
+                      <ListGroup.Item key={i}>
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <strong>{p.name}</strong>
+                            <Badge bg="danger" className="ms-2">
+                              Dangerous
+                            </Badge>
+                            <div className="small text-muted mt-1">
+                              {short(p.info)}
+                            </div>
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                </>
+              )}
+            </div>
+          </Collapse>
+        </Card.Body>
+      </Card>
+    </div>
+  );
+}
