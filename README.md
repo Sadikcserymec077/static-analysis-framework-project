@@ -120,11 +120,11 @@
 ### ✅ Windows – One-Time Setup
 
 In the **project root** (where `setup.bat` is):
-
+###
+firts setup all the dependencies and api key
 ```bat
 .\setup.bat 
 
 ### then run this command
 
-```bat
 .\start.bat
