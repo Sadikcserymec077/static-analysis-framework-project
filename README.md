@@ -122,4 +122,9 @@
 In the **project root** (where `setup.bat` is):
 
 ```bat
-setup.bat
+.\setup.bat 
+
+### then run this command
+
+```bat
+.\start.bat
