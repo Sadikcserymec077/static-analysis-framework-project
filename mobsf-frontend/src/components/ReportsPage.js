@@ -1,8 +1,7 @@
-// src/components/ReportsPage.js
 import React, { useState } from "react";
-import { Card, Button } from "react-bootstrap";
 import ScansCard from "./ScansCard";
 import ReportPanel from "./ReportPanel";
+import { FaArrowLeft } from "react-icons/fa";
 
 export default function ReportsPage({ refreshKey }) {
   // view: "list" = show only recent scans, "detail" = show only report
@@ -23,50 +22,34 @@ export default function ReportsPage({ refreshKey }) {
   };
 
   return (
-    <div className="container saf-main-container">
-      <div className="row mb-3">
-        <div className="col-12 d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Reports</h5>
-
-          {view === "detail" && (
-            <Button
-              size="sm"
-              variant="outline-secondary"
-              onClick={handleBackToList}
-            >
-              <i className="bi bi-arrow-left-short me-1" />
-              Back to Recent Scans
-            </Button>
-          )}
+    <div className="w-full">
+      {view === "detail" && (
+        <div className="mb-6">
+          <button
+            onClick={handleBackToList}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+          >
+            <FaArrowLeft />
+            Back to Recent Scans
+          </button>
         </div>
-      </div>
+      )}
 
       {view === "list" && (
-        <div className="row justify-content-center">
-          <div className="col-xl-6 col-lg-7 col-md-8 col-sm-10 col-12">
-            {/* ONLY recent scans list */}
-            <ScansCard onSelect={handleSelectScan} refreshKey={refreshKey} />
-          </div>
+        <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <ScansCard onSelect={handleSelectScan} refreshKey={refreshKey} />
         </div>
       )}
 
       {view === "detail" && (
-        <div className="row">
-          <div className="col-12">
-            {selectedHash ? (
-              // FULL report panel (summary + PDF preview/download)
-              <ReportPanel hash={selectedHash} />
-            ) : (
-              <Card className="shadow-sm">
-                <Card.Body>
-                  <div className="text-muted">
-                    No scan selected. Click{" "}
-                    <strong>Back to Recent Scans</strong> and choose an APK.
-                  </div>
-                </Card.Body>
-              </Card>
-            )}
-          </div>
+        <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+          {selectedHash ? (
+            <ReportPanel hash={selectedHash} />
+          ) : (
+            <div className="text-center p-12 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 transition-colors duration-200">
+              <p className="text-slate-500 dark:text-slate-400">No scan selected.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

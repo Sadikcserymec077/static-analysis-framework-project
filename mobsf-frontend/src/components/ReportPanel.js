@@ -1,8 +1,11 @@
-// src/components/ReportPanel.js
 import React, { useState, useEffect } from "react";
-import { Card, Button, Badge } from "react-bootstrap";
 import { savePdfReport, saveJsonReport, getReportJSON } from "../api";
 import HumanReport from "./HumanReport";
+import AppDetailsCard from "./AppDetailsCard";
+import SecurityScore from "./SecurityScore";
+import DependencyTable from "./DependencyTable";
+import { FaFilePdf, FaDownload, FaEye, FaSpinner, FaFileCsv, FaFileCode, FaCubes } from "react-icons/fa";
+import { downloadCSV } from "../utils/exportUtils";
 
 export default function ReportPanel({ hash, initialJsonPath }) {
   const [report, setReport] = useState(null);
@@ -49,9 +52,12 @@ export default function ReportPanel({ hash, initialJsonPath }) {
     })();
   }, [hash, initialJsonPath]);
 
-  // Explicit Summary button handler (reloads JSON and shows human report)
   const handleShowSummary = async () => {
     if (!hash) { setMsg("No hash selected"); return; }
+    if (report) {
+      setViewMode("json");
+      return;
+    }
     setLoading(true);
     setMsg("Loading summary...");
     try {
@@ -62,7 +68,6 @@ export default function ReportPanel({ hash, initialJsonPath }) {
       setViewMode("json");
       setMsg("");
     } catch (e) {
-      // fallback to GET proxy
       try {
         const r2 = await getReportJSON(hash);
         setReport(r2.data);
@@ -111,65 +116,131 @@ export default function ReportPanel({ hash, initialJsonPath }) {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!report) return;
+    downloadCSV(report, `scan_report_${hash}`);
+  };
+
+
+
   const closePdf = () => {
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     setPdfUrl(null);
-    setViewMode("none");
+    setViewMode("json"); // Go back to summary
   };
 
-  return (
-    <Card className="shadow-sm">
-      <Card.Body>
-        <div className="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <Card.Title>Report</Card.Title>
-            <div className="text-muted">Hash: <Badge bg="light" text="dark">{hash || "none"}</Badge></div>
-          </div>
+  if (!hash) {
+    return (
+      <div className="text-center p-12 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 transition-colors duration-200">
+        <p className="text-slate-500 dark:text-slate-400">Select a scan to view the report.</p>
+      </div>
+    );
+  }
 
-          <div>
-            {/* Summary button to switch to human-friendly report */}
-            <Button variant="outline-secondary" size="sm" onClick={handleShowSummary} disabled={!hash || loading}>Summary</Button>{' '}
-            <Button variant="warning" size="sm" onClick={handlePreviewPDF} disabled={!hash || loading}>Preview PDF</Button>{' '}
-            <Button variant="success" size="sm" onClick={handleDownloadPdf} disabled={!hash || loading}>Download PDF</Button>
-            {viewMode === 'pdf' && <Button variant="outline-danger" size="sm" onClick={closePdf} style={{ marginLeft: 8 }}>Close PDF</Button>}
+  return (
+    <div className="space-y-6">
+      {/* Header Actions */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-200">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Scan Report</h2>
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">
+            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">MD5: {hash}</span>
           </div>
         </div>
 
-        {msg && <div className="alert alert-info py-1">{msg}</div>}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleShowSummary}
+            disabled={loading || viewMode === 'json'}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'json' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+            <FaEye /> Summary
+          </button>
 
-        {/* Show the human-friendly JSON report */}
-        // src/components/ReportPanel.js  (inside return)
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
 
-{viewMode === 'json' && report && (
-  <div
-    style={{
-      maxHeight: 'calc(100vh - 260px)',  // adjust if needed
-      overflowY: 'auto',
-      paddingRight: '4px',
-    }}
-  >
-    <div style={{ marginBottom: 8 }}>
-      {jsonPath && (
-        <small>
-          Saved JSON: <a href={jsonPath} target="_blank" rel="noreferrer">{jsonPath}</a>
-        </small>
+          <button
+            onClick={handleExportCSV}
+            disabled={!report}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            title="Export as CSV"
+          >
+            <FaFileCsv className="text-emerald-600 dark:text-emerald-400" /> CSV
+          </button>
+
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
+
+          <button
+            onClick={handlePreviewPDF}
+            disabled={loading}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'pdf' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+            <FaFilePdf /> Preview PDF
+          </button>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <FaDownload /> Download PDF
+          </button>
+        </div>
+      </div>
+
+      {msg && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg text-sm border border-blue-100 dark:border-blue-900/30 flex items-center gap-2">
+          {loading && <FaSpinner className="animate-spin" />}
+          {msg}
+        </div>
+      )}
+
+      {loading && !report && (
+        <div className="flex justify-center py-12">
+          <FaSpinner className="animate-spin text-primary text-4xl" />
+        </div>
+      )}
+
+      {/* Report Content */}
+      {viewMode === 'json' && report && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Top Section: Two Columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-full">
+              <AppDetailsCard data={report} />
+            </div>
+            <div className="h-full">
+              <SecurityScore data={report} />
+            </div>
+          </div>
+
+          {/* Bottom Section: Findings */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors duration-200">
+            <HumanReport data={report} />
+          </div>
+
+          {/* Dependencies Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors duration-200">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+              <FaCubes className="text-indigo-500" />
+              Third-Party Dependencies
+            </h3>
+            <DependencyTable data={report} />
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'pdf' && pdfUrl && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 animate-in fade-in zoom-in duration-300 transition-colors duration-200">
+          <div className="flex justify-end mb-4">
+            <button onClick={closePdf} className="text-sm text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium">Close PDF Preview</button>
+          </div>
+          <iframe
+            title="report-pdf"
+            src={pdfUrl}
+            className="w-full h-[800px] rounded-lg border border-slate-200 dark:border-slate-700"
+          />
+        </div>
       )}
     </div>
-    <HumanReport data={report} />
-  </div>
-)}
-
-
-        {/* PDF preview */}
-        {viewMode === 'pdf' && pdfUrl && (
-          <div>
-            <iframe title="report-pdf" src={pdfUrl} style={{ width: '100%', height: 640, border: '1px solid #ddd', borderRadius: 6 }} />
-          </div>
-        )}
-
-        {/* placeholder */}
-        {viewMode === 'none' && <div className="text-muted">Report will load automatically when a scan is selected. Use Preview PDF or Summary to switch views.</div>}
-      </Card.Body>
-    </Card>
   );
 }

@@ -31,9 +31,11 @@ export const getScans = (page = 1, page_size = 10) =>
 
 // Poll scan logs (backend proxies to MobSF)
 export const getScanLogs = (hash) =>
-  axios.post(`${API_BASE}/api/scan_logs`, `hash=${hash}`, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  });
+  axios.post(`${API_BASE}/api/scan_logs`, { hash });
+
+// Get AndroidManifest.xml
+export const getManifest = (hash) =>
+  axios.post(`${API_BASE}/api/manifest_view`, { hash });
 
 // Save & cache JSON report on server, returns saved path + data
 export const saveJsonReport = (hash) =>

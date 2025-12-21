@@ -1,30 +1,27 @@
 // ✅ MobSF Proxy Backend - server.js
-// Works with MobSF running locally (http://localhost:8000)
-// Node + Express backend that proxies MobSF API calls and caches reports
-
-// 🔹 Force-clear old global vars and load .env fresh
-delete process.env.MOBSF_API_KEY;
-require('dotenv').config();
-
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const axios = require('axios');
 const FormData = require('form-data');
 const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
-const path = require('path');
 
 const upload = multer({ dest: path.join(__dirname, 'tmp/') });
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+const aiService = require('./aiService.js');
 
 // ✅ Directories for saved reports
 const REPORTS_DIR = path.join(__dirname, 'reports');
 const JSON_DIR = path.join(REPORTS_DIR, 'json');
 const PDF_DIR = path.join(REPORTS_DIR, 'pdf');
 [REPORTS_DIR, JSON_DIR, PDF_DIR].forEach(d => {
-  try { fs.mkdirSync(d, { recursive: true }); } catch {}
+  try { fs.mkdirSync(d, { recursive: true }); } catch { }
 });
 
 // ✅ MobSF Config
@@ -244,6 +241,147 @@ app.get('/api/scans', async (req, res) => {
     res.json(resp.data);
   } catch (err) {
     sendProxyError(res, err);
+  }
+});
+
+// ✅ 11.5. Manifest View
+app.post('/api/manifest_view', async (req, res) => {
+  try {
+    const { hash } = req.body;
+    if (!hash) return res.status(422).json({ error: 'hash required' });
+
+    const data = new URLSearchParams();
+    data.append('hash', hash);
+    data.append('file', 'AndroidManifest.xml');
+    data.append('type', 'apk');
+
+    console.log('Fetching Manifest from MobSF...');
+    const resp = await axios.post(`${MOBSF_URL}/api/v1/view_source`, data.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...mobHeaders() },
+    });
+    res.json(resp.data);
+  } catch (err) {
+    sendProxyError(res, err);
+  }
+});
+
+// ✅ 12. AI Explain Endpoint
+app.post('/api/ai/explain', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(422).json({ error: 'Query required' });
+
+    const explanation = await aiService.explain(query);
+    res.json(explanation);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ 12. Analytics Endpoint
+app.get('/api/analytics', (req, res) => {
+  try {
+    const files = fs.readdirSync(JSON_DIR).filter(f => f.endsWith('.json'));
+    const totalScans = files.length;
+
+    let totalScore = 0;
+    const severityCounts = { high: 0, medium: 0, info: 0, secure: 0 };
+    const vulnerabilityCounts = {};
+    const recentScores = []; // { date, score }
+
+    files.forEach(file => {
+      try {
+        const content = fs.readFileSync(path.join(JSON_DIR, file), 'utf8');
+        const data = JSON.parse(content);
+
+        // Score
+        // MobSF score is often in data.average_cvss or calculated. 
+        // We'll use a simple heuristic if not present: 100 - (5*high + 2*medium)
+        let score = 0;
+        // Try to find a score in the report or calculate one
+        // Heuristic calculation based on findings
+        const manifest = data.manifest_analysis || data.Manifest || {};
+        const code = data.code_analysis?.findings || {};
+        const perms = data.permissions || {};
+
+        let high = 0, medium = 0, info = 0;
+
+        // Count Manifest
+        const mFindings = manifest.manifest_findings || manifest.findings || [];
+        mFindings.forEach(f => {
+          const s = (f.severity || '').toLowerCase();
+          if (s.includes('high')) high++;
+          else if (s.includes('warn') || s.includes('medium')) medium++;
+          else info++;
+
+          // Track title
+          const title = f.title || f.name;
+          if (title) vulnerabilityCounts[title] = (vulnerabilityCounts[title] || 0) + 1;
+        });
+
+        // Count Code
+        Object.entries(code).forEach(([key, val]) => {
+          const s = (val.metadata?.severity || '').toLowerCase();
+          if (s.includes('high')) high++;
+          else if (s.includes('warn') || s.includes('medium')) medium++;
+          else info++;
+
+          const title = val.metadata?.description || key;
+          if (title) vulnerabilityCounts[title] = (vulnerabilityCounts[title] || 0) + 1;
+        });
+
+        // Count Permissions (Dangerous)
+        Object.entries(perms).forEach(([perm, details]) => {
+          const status = details.status || details.level || '';
+          if (/(dangerous|danger)/i.test(status)) {
+            high++;
+            vulnerabilityCounts[perm] = (vulnerabilityCounts[perm] || 0) + 1;
+          }
+        });
+
+        // Calculate Score (0-100)
+        score = Math.max(0, 100 - (high * 10) - (medium * 5));
+        totalScore += score;
+
+        // Aggregates
+        severityCounts.high += high;
+        severityCounts.medium += medium;
+        severityCounts.info += info;
+
+        // Date for trend
+        const stat = fs.statSync(path.join(JSON_DIR, file));
+        recentScores.push({
+          date: stat.mtime.toISOString().split('T')[0], // YYYY-MM-DD
+          score: score,
+          hash: file.replace('.json', '')
+        });
+
+      } catch (e) {
+        console.error(`Error processing ${file} for analytics:`, e.message);
+      }
+    });
+
+    const avgScore = totalScans > 0 ? Math.round(totalScore / totalScans) : 0;
+
+    // Sort recent scores by date
+    recentScores.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Top 5 Vulnerabilities
+    const topVulnerabilities = Object.entries(vulnerabilityCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json({
+      totalScans,
+      avgScore,
+      severityCounts,
+      topVulnerabilities,
+      recentScores
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

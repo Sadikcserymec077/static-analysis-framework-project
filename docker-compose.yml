@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # 1. MobSF (The Core Engine)
+  mobsf:
+    image: opensecurity/mobile-security-framework-mobsf:latest
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - mobsf_data:/home/mobsf/.MobSF
+
+  # 2. Backend (The Proxy & API)
+  backend:
+    build: ./mobsf-ui-backend
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - MOBSF_URL=http://mobsf:8000
+      - MOBSF_API_KEY=${MOBSF_API_KEY} # You must set this in .env or server env
+      - PORT=4000
+    depends_on:
+      - mobsf
+
+  # 3. Frontend (The UI)
+  # For production, we use a multi-stage build (Node -> Nginx)
+  frontend:
+    build: 
+      context: ./mobsf-frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mobsf_data:

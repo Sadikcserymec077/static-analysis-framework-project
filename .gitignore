@@ -2,3 +2,9 @@
 node_modules/
 
 
+
+# Generated Reports
+mobsf-ui-backend/reports/json/*
+!mobsf-ui-backend/reports/json/.gitkeep
+mobsf-ui-backend/reports/pdf/*
+!mobsf-ui-backend/reports/pdf/.gitkeep
